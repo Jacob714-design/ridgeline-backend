@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CONTRACTOR
+  ADJUSTER
+}
+
+enum ClaimStatus {
+  NEW
+  IN_PROGRESS
+  UNDER_REVIEW
+  APPROVED
+  DENIED
+  CLOSED
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum DocumentEntityType {
+  PROJECT
+  CLAIM
+  CLIENT
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  claims       Claim[]
+  projects     Project[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  phone     String
+  email     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  claims    Claim[]
+}
+
+model Claim {
+  id               String      @id @default(cuid())
+  clientId         String
+  insuranceCompany String
+  claimNumber      String      @unique
+  status           ClaimStatus @default(NEW)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  userId           String?
+  
+  client           Client      @relation(fields: [clientId], references: [id])
+  user             User?       @relation(fields: [userId], references: [id])
+  projects         Project[]
+  documents        Document[]
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  claimId     String
+  title       String
+  description String?
+  status      ProjectStatus @default(DRAFT)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  userId      String?
+  
+  claim       Claim         @relation(fields: [claimId], references: [id])
+  user        User?         @relation(fields: [userId], references: [id])
+  lineItems   EstimateLineItem[]
+  documents   Document[]
+}
+
+model EstimateLineItem {
+  id                   String  @id @default(cuid())
+  projectId            String
+  description          String
+  unitPrice            Decimal @db.Decimal(10, 2)
+  quantity             Decimal @db.Decimal(10, 2)
+  total                Decimal @db.Decimal(10, 2)
+  codeRef              String?
+  manufacturerRef      String?
+  approvalProbability  Float?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  project              Project @relation(fields: [projectId], references: [id])
+}
+
+model ManufacturerSpec {
+  id          String   @id @default(cuid())
+  name        String
+  documentUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CodeLookup {
+  id           String   @id @default(cuid())
+  jurisdiction String
+  codeText     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@index([jurisdiction])
+}
+
+model Document {
+  id         String             @id @default(cuid())
+  entityType DocumentEntityType
+  entityId   String
+  fileUrl    String
+  ocrData    Json?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  
+  project    Project?           @relation(fields: [entityId], references: [id])
+  claim      Claim?             @relation(fields: [entityId], references: [id])
+  
+  @@index([entityType, entityId])
+}
